@@ -106,7 +106,19 @@ void reconnect() {
 }
 
 void publishMessage() {
-  client.publish(CONTROL_LED_TOPIC, "Alert! Intruder detected!");
+  StaticJsonDocument<200> jsonDocument;
+  
+  // Añadimos los datos que deseamos enviar al objeto JSON
+  jsonDocument["msg"] = "Alert! Intruder detected!";
+  jsonDocument["time"] = millis(); // Ejemplo de agregar el tiempo actual
+  
+  // Convertimos el objeto JSON a un string
+  char jsonString[200];
+  serializeJson(jsonDocument, jsonString);
+  
+  // Publicamos el mensaje MQTT
+  client.publish(CONTROL_LED_TOPIC, jsonString);
+  //client.publish(CONTROL_LED_TOPIC, "Alert! Intruder detected!");
 }
 
 void setup() {
