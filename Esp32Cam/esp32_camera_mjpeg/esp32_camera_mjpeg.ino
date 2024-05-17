@@ -15,7 +15,7 @@
 #define SSID1 "POCO F3"
 #define PWD1 "llabakawifi"
 
-OV2640 cam;z
+OV2640 cam;
 
 WiFiMulti wifiMulti;
 
