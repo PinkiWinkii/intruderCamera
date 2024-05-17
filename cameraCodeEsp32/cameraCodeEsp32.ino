@@ -1,19 +1,6 @@
-/*
-
-  This is a simple MJPEG streaming webserver implemented for AI-Thinker ESP32-CAM and
-  ESP32-EYE modules.
-  This is tested to work with VLC and Blynk video widget.
-
-  Inspired by and based on this Instructable: $9 RTSP Video Streamer Using the ESP32-CAM Board
-  (https://www.instructables.com/id/9-RTSP-Video-Streamer-Using-the-ESP32-CAM-Board/)
-
-  Board: AI-Thinker ESP32-CAM
-
-*/
-
 #include "src/OV2640.h"
 #include <WiFi.h>
-#include <WebServer.h>
+#include <WiFiMulti.h>
 #include <WiFiClient.h>
 
 // Select camera model
@@ -25,12 +12,14 @@
 
 #include "camera_pins.h"
 
-#define SSID1 "GONBIDATUAK"
-#define PWD1 "FAC3200BBC"
+#define SSID1 "POCO F3"
+#define PWD1 "llabakawifi"
 
-OV2640 cam;
+OV2640 cam;z
 
-WebServer server(80);
+WiFiMulti wifiMulti;
+
+WiFiServer server(80);
 
 const char HEADER[] = "HTTP/1.1 200 OK\r\n" \
                       "Access-Control-Allow-Origin: *\r\n" \
@@ -41,12 +30,10 @@ const int hdrLen = strlen(HEADER);
 const int bdrLen = strlen(BOUNDARY);
 const int cntLen = strlen(CTNTTYPE);
 
-void handle_jpg_stream(void)
+void handle_jpg_stream(WiFiClient client)
 {
   char buf[32];
   int s;
-
-  WiFiClient client = server.client();
 
   client.write(HEADER, hdrLen);
   client.write(BOUNDARY, bdrLen);
@@ -69,32 +56,36 @@ const char JHEADER[] = "HTTP/1.1 200 OK\r\n" \
                        "Content-type: image/jpeg\r\n\r\n";
 const int jhdLen = strlen(JHEADER);
 
-void handle_jpg(void)
+void handle_jpg(WiFiClient client)
 {
-  WiFiClient client = server.client();
-
-  if (!client.connected()) return;
   cam.run();
+  if (!client.connected()) return;
+
   client.write(JHEADER, jhdLen);
   client.write((char *)cam.getfb(), cam.getSize());
 }
 
 void handleNotFound()
 {
+  WiFiClient client = server.available();
+
   String message = "Server is running!\n\n";
   message += "URI: ";
-  message += server.uri();
+  message += "/"; // URI not available with WiFiServer, so just show root
   message += "\nMethod: ";
-  message += (server.method() == HTTP_GET) ? "GET" : "POST";
+  message += "GET"; // Method not available, assuming it's always GET
   message += "\nArguments: ";
-  message += server.args();
+  message += "0"; // Arguments not available, assuming 0
   message += "\n";
-  server.send(200, "text / plain", message);
+  client.println(HEADER);
+  client.println("Content-Type: text/plain");
+  client.println("Connection: close");
+  client.println();
+  client.println(message);
 }
 
 void setup()
 {
-
   Serial.begin(115200);
   //while (!Serial);            //wait for serial connection.
 
@@ -149,13 +140,34 @@ void setup()
   Serial.print("Stream Link: http://");
   Serial.print(ip);
   Serial.println("/mjpeg/1");
-  server.on("/mjpeg/1", HTTP_GET, handle_jpg_stream);
-  server.on("/jpg", HTTP_GET, handle_jpg);
-  server.onNotFound(handleNotFound);
+
   server.begin();
 }
 
 void loop()
 {
-  server.handleClient();
+  WiFiClient client = server.available();
+  if (client)
+  {
+    if (client.connected())
+    {
+      if (client.available())
+      {
+        String req = client.readStringUntil('\r');
+        if (req.indexOf("/mjpeg/1") != -1)
+        {
+          handle_jpg_stream(client);
+        }
+        else if (req.indexOf("/jpg") != -1)
+        {
+          handle_jpg(client);
+        }
+        else
+        {
+          handleNotFound();
+        }
+        client.stop();
+      }
+    }
+  }
 }
